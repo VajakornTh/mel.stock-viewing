@@ -467,70 +467,15 @@ let allData = [];
 let activeZone = null;
 let searchQuery = '';
 
-const OVERSTAY_DAYS = 14;
 const TABS = ['IN STOCK', 'RETURN', 'OVERSTAY', 'DELIVERED'];
 
-async function fetchTable(table, select, order) {
+async function loadData() {
   const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/${table}?select=${select}&order=${order}&limit=2000`,
+    `${SUPABASE_URL}/rest/v1/stock_snapshot?select=*&order=display_status.asc,item_description.asc&limit=2000`,
     { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
   );
-  if (!res.ok) throw new Error(`Failed to fetch ${table}: ` + res.status);
+  if (!res.ok) throw new Error('Failed to fetch: ' + res.status);
   return res.json();
-}
-
-function toDisplayStatus(r, source) {
-  if (source === 'return') return 'RETURN';
-  if (source === 'inventory') return 'DELIVERED';
-  // receive_log: check age
-  const scanDate = r.scanned_at ? new Date(r.scanned_at) : new Date(r.created_at);
-  const daysDiff = (Date.now() - scanDate.getTime()) / 86400000;
-  return daysDiff > OVERSTAY_DAYS ? 'OVERSTAY' : 'IN STOCK';
-}
-
-function aggregate(rawRows) {
-  const map = new Map();
-  for (const r of rawRows) {
-    const ds = r._display_status;
-    const key = `${r.order_number}|${r.fulfillment_id}|${r.product_code}|${r.bin_location}|${ds}`;
-    if (!map.has(key)) {
-      const bin = r.bin_location || null;
-      map.set(key, {
-        order_number: r.order_number,
-        fulfillment_id: r.fulfillment_id,
-        product_code: r.product_code,
-        item_description: r.item_description,
-        bin_slot: bin,
-        zone: bin
-          ? (bin.startsWith('A-') ? 'A-Dynamic'
-           : bin.startsWith('B-') ? 'B-Dynamic'
-           : bin)
-          : 'Unassigned',
-        on_hand: 0,
-        target_count: r.target_count,
-        display_status: ds,
-      });
-    }
-    map.get(key).on_hand += (r.scanned_count || 1);
-  }
-  return [...map.values()];
-}
-
-async function loadData() {
-  const invFields = 'order_number,fulfillment_id,product_code,item_description,bin_location,scanned_count,target_count,status';
-  const rcvFields = 'order_number,fulfillment_id,product_code,item_description,bin_location,scanned_count,target_count,status,scanned_at,created_at';
-
-  const [inv, rcv] = await Promise.all([
-    fetchTable('inventory', invFields, 'order_number.asc,item_description.asc'),
-    fetchTable('receive_log', rcvFields, 'order_number.asc,item_description.asc'),
-  ]);
-
-  const tagged = [
-    ...inv.map(r => ({ ...r, _display_status: toDisplayStatus(r, 'inventory') })),
-    ...rcv.filter(r => r.status === 'RECEIVED' || r.status === 'COURIER_AUTO_DELIVERED')
-         .map(r => ({ ...r, _display_status: toDisplayStatus(r, 'receive_log') })),
-  ];
-  return aggregate(tagged);
 }
 
 function getZoneChipClass(zone) {
@@ -555,18 +500,18 @@ function getBinSlotDisplay(zone, bin_slot) {
 }
 
 function getStatusChipClass(status) {
-  if (!status || status === '-') return 's-other';
-  const s = status.toUpperCase();
-  if (s === 'RECEIVED' || s.includes('IN STOCK') || s.includes('DELIVER')) return 's-delivered';
-  if (s.includes('PENDING')) return 's-pending';
-  if (s.includes('CANCEL')) return 's-cancelled';
-  return 's-other';
+  if (!status) return 's-other';
+  switch(status) {
+    case 'IN STOCK':  return 's-delivered';
+    case 'DELIVERED': return 's-pending';
+    case 'OVERSTAY':  return 's-cancelled';
+    case 'RETURN':    return 's-other';
+    default:          return 's-other';
+  }
 }
 
 function getStatusLabel(status) {
-  if (!status || status === '-') return '—';
-  if (status === 'RECEIVED') return 'In Stock';
-  return status.replace(/_/g,' ');
+  return status || '—';
 }
 
 function renderTable(data) {
@@ -594,7 +539,7 @@ function renderTable(data) {
       </td>
       <td class="qty-cell ${r.on_hand > 0 ? 'qty-has' : 'qty-zero'}">${r.on_hand ?? 0}</td>
       <td class="qty-cell ${(r.target_count||0) > 0 ? 'qty-has' : 'qty-zero'}">${r.target_count ?? '—'}</td>
-      <td><span class="status-chip ${getStatusChipClass(r.status)}">${getStatusLabel(r.status)}</span></td>
+      <td><span class="status-chip ${getStatusChipClass(r.display_status)}">${getStatusLabel(r.display_status)}</span></td>
     </tr>
   `).join('');
 }
