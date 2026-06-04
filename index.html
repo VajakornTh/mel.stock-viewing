@@ -467,6 +467,9 @@ let allData = [];
 let activeZone = null;
 let searchQuery = '';
 
+const OVERSTAY_DAYS = 14;
+const TABS = ['IN STOCK', 'RETURN', 'OVERSTAY', 'DELIVERED'];
+
 async function fetchTable(table, select, order) {
   const res = await fetch(
     `${SUPABASE_URL}/rest/v1/${table}?select=${select}&order=${order}&limit=2000`,
@@ -476,10 +479,20 @@ async function fetchTable(table, select, order) {
   return res.json();
 }
 
-function aggregate(rows) {
+function toDisplayStatus(r, source) {
+  if (source === 'return') return 'RETURN';
+  if (source === 'inventory') return 'DELIVERED';
+  // receive_log: check age
+  const scanDate = r.scanned_at ? new Date(r.scanned_at) : new Date(r.created_at);
+  const daysDiff = (Date.now() - scanDate.getTime()) / 86400000;
+  return daysDiff > OVERSTAY_DAYS ? 'OVERSTAY' : 'IN STOCK';
+}
+
+function aggregate(rawRows) {
   const map = new Map();
-  for (const r of rows) {
-    const key = `${r.order_number}|${r.fulfillment_id}|${r.product_code}|${r.bin_location}|${r.status}`;
+  for (const r of rawRows) {
+    const ds = r._display_status;
+    const key = `${r.order_number}|${r.fulfillment_id}|${r.product_code}|${r.bin_location}|${ds}`;
     if (!map.has(key)) {
       const bin = r.bin_location || null;
       map.set(key, {
@@ -495,7 +508,7 @@ function aggregate(rows) {
           : 'Unassigned',
         on_hand: 0,
         target_count: r.target_count,
-        status: r.status,
+        display_status: ds,
       });
     }
     map.get(key).on_hand += (r.scanned_count || 1);
@@ -504,12 +517,20 @@ function aggregate(rows) {
 }
 
 async function loadData() {
-  const fields = 'order_number,fulfillment_id,product_code,item_description,bin_location,scanned_count,target_count,status';
+  const invFields = 'order_number,fulfillment_id,product_code,item_description,bin_location,scanned_count,target_count,status';
+  const rcvFields = 'order_number,fulfillment_id,product_code,item_description,bin_location,scanned_count,target_count,status,scanned_at,created_at';
+
   const [inv, rcv] = await Promise.all([
-    fetchTable('inventory', fields, 'order_number.asc,item_description.asc'),
-    fetchTable('receive_log', fields, 'order_number.asc,item_description.asc'),
+    fetchTable('inventory', invFields, 'order_number.asc,item_description.asc'),
+    fetchTable('receive_log', rcvFields, 'order_number.asc,item_description.asc'),
   ]);
-  return aggregate([...inv, ...rcv]);
+
+  const tagged = [
+    ...inv.map(r => ({ ...r, _display_status: toDisplayStatus(r, 'inventory') })),
+    ...rcv.filter(r => r.status === 'RECEIVED' || r.status === 'COURIER_AUTO_DELIVERED')
+         .map(r => ({ ...r, _display_status: toDisplayStatus(r, 'receive_log') })),
+  ];
+  return aggregate(tagged);
 }
 
 function getZoneChipClass(zone) {
@@ -579,14 +600,15 @@ function renderTable(data) {
 }
 
 function buildZoneFilters(data) {
-  const statuses = [...new Set(data.map(r => r.status).filter(Boolean))].sort();
-
-  activeZone = statuses[0] || null;
+  activeZone = TABS[0];
 
   const container = document.getElementById('zoneFilters');
-  container.innerHTML = statuses.map((s, i) => `
-    <button class="filter-btn${i === 0 ? ' active' : ''}" data-zone="${s}">${s}</button>
-  `).join('');
+  container.innerHTML = TABS.map((s, i) => {
+    const count = data.filter(r => r.display_status === s).length;
+    return `<button class="filter-btn${i === 0 ? ' active' : ''}" data-zone="${s}">
+      ${s} <span style="font-size:10px;opacity:.7;">(${count})</span>
+    </button>`;
+  }).join('');
 
   container.addEventListener('click', e => {
     const btn = e.target.closest('.filter-btn');
@@ -600,7 +622,7 @@ function buildZoneFilters(data) {
 
 function filterData() {
   let d = allData;
-  if (activeZone) d = d.filter(r => r.status === activeZone);
+  if (activeZone) d = d.filter(r => r.display_status === activeZone);
   if (searchQuery) {
     const q = searchQuery.toLowerCase();
     d = d.filter(r =>
