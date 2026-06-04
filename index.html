@@ -469,11 +469,35 @@ let searchQuery = '';
 
 async function loadData() {
   const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/stock_items?select=*&order=zone.asc,item_description.asc&limit=2000`,
+    `${SUPABASE_URL}/rest/v1/inventory?select=order_number,fulfillment_id,product_code,item_description,bin_location,carton_index,scanned_count,target_count,status&order=order_number.asc,item_description.asc&limit=2000`,
     { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
   );
   if (!res.ok) throw new Error('Failed to fetch: ' + res.status);
-  return res.json();
+  const rows = await res.json();
+  // aggregate by order+fulfillment+product+bin
+  const map = new Map();
+  for (const r of rows) {
+    const key = `${r.order_number}|${r.fulfillment_id}|${r.product_code}|${r.bin_location}`;
+    if (!map.has(key)) {
+      map.set(key, {
+        order_number: r.order_number,
+        fulfillment_id: r.fulfillment_id,
+        product_code: r.product_code,
+        item_description: r.item_description,
+        bin_slot: r.bin_location,
+        zone: r.bin_location
+          ? (r.bin_location.startsWith('A-') ? 'A-Dynamic'
+           : r.bin_location.startsWith('B-') ? 'B-Dynamic'
+           : r.bin_location)
+          : 'Unassigned',
+        on_hand: 0,
+        target_count: r.target_count,
+        status: r.status,
+      });
+    }
+    map.get(key).on_hand += (r.scanned_count || 1);
+  }
+  return [...map.values()];
 }
 
 function getZoneChipClass(zone) {
