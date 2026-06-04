@@ -430,7 +430,7 @@ tbody td:first-child{font-family:var(--ff-head);font-size:13px;font-weight:600;
     <div class="controls">
       <div class="search-wrap">
         <span class="search-icon">🔍</span>
-        <input type="text" id="searchInput" placeholder="ค้นหา Order No, Fulfillment ID หรือชื่อสินค้า…">
+        <input type="text" id="searchInput" placeholder="ค้นหา Product Code หรือชื่อสินค้า…">
       </div>
       <div class="filter-group" id="zoneFilters"></div>
       <div class="results-info" id="resultsInfo">— items</div>
@@ -440,12 +440,11 @@ tbody td:first-child{font-family:var(--ff-head);font-size:13px;font-weight:600;
       <table>
         <thead>
           <tr>
-            <th>Order No</th>
-            <th>Fulfillment ID</th>
+            <th>Product Code</th>
             <th>Description</th>
-            <th>Zone</th>
+            <th>Zone / Bin</th>
             <th>On Hand</th>
-            <th>Target Count</th>
+            <th>Target</th>
             <th>Status</th>
           </tr>
         </thead>
@@ -500,14 +499,15 @@ function getBinSlotDisplay(zone, bin_slot) {
 function getStatusChipClass(status) {
   if (!status || status === '-') return 's-other';
   const s = status.toUpperCase();
-  if (s.includes('DELIVER')) return 's-delivered';
-  if (s.includes('PENDING') || s.includes('RECEIV')) return 's-pending';
+  if (s === 'RECEIVED' || s.includes('IN STOCK') || s.includes('DELIVER')) return 's-delivered';
+  if (s.includes('PENDING')) return 's-pending';
   if (s.includes('CANCEL')) return 's-cancelled';
   return 's-other';
 }
 
 function getStatusLabel(status) {
   if (!status || status === '-') return '—';
+  if (status === 'RECEIVED') return 'In Stock';
   return status.replace(/_/g,' ');
 }
 
@@ -527,12 +527,14 @@ function renderTable(data) {
 
   tbody.innerHTML = data.map(r => `
     <tr>
-      <td>${r.order_no || '—'}</td>
-      <td><span style="font-family:var(--ff-head);font-size:12px;letter-spacing:.06em;color:var(--steel-500);">${r.fulfillment_id || '—'}</span></td>
+      <td><span style="font-family:var(--ff-head);font-size:12px;letter-spacing:.06em;color:var(--steel-500);">${r.product_code || '—'}</span></td>
       <td>${r.item_description || '—'}</td>
-      <td><span class="zone-chip ${getZoneChipClass(r.zone)}">${getZoneDisplay(r.zone)}</span></td>
+      <td>
+        <span class="zone-chip ${getZoneChipClass(r.zone)}">${getZoneDisplay(r.zone)}</span>
+        ${r.bin_slot ? `<span style="margin-left:6px;font-family:var(--ff-head);font-size:10px;color:var(--steel-500);letter-spacing:.06em;">${r.bin_slot}</span>` : ''}
+      </td>
       <td class="qty-cell ${r.on_hand > 0 ? 'qty-has' : 'qty-zero'}">${r.on_hand ?? 0}</td>
-      <td class="qty-cell ${r.target_count > 0 ? 'qty-has' : 'qty-zero'}">${r.target_count ?? '—'}</td>
+      <td class="qty-cell ${(r.target_count||0) > 0 ? 'qty-has' : 'qty-zero'}">${r.target_count ?? '—'}</td>
       <td><span class="status-chip ${getStatusChipClass(r.status)}">${getStatusLabel(r.status)}</span></td>
     </tr>
   `).join('');
@@ -543,22 +545,26 @@ function buildZoneFilters(data) {
     data.map(r => r.zone).filter(z => z && z !== 'Unassigned')
   )].sort();
 
-  activeZone = zones[0] || null;
+  activeZone = null;
 
   const container = document.getElementById('zoneFilters');
-  container.innerHTML = zones.map((z, i) => `
-    <button class="filter-btn${i === 0 ? ' active' : ''}" data-zone="${z}">${z.replace('-Dynamic',' Dynamic').toUpperCase()}</button>
-  `).join('');
+  container.innerHTML =
+    `<button class="filter-btn active" data-zone="">ALL</button>` +
+    zones.map(z => `
+      <button class="filter-btn" data-zone="${z}">${z.replace('-Dynamic',' Dynamic').toUpperCase()}</button>
+    `).join('');
 
   container.addEventListener('click', e => {
     const btn = e.target.closest('.filter-btn');
     if (!btn) return;
     document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    activeZone = btn.dataset.zone;
+    activeZone = btn.dataset.zone || null;
     document.querySelectorAll('.zone').forEach(z => z.classList.remove('active'));
-    const mapZone = document.querySelector(`.zone[data-zone="${activeZone}"]`);
-    if (mapZone) mapZone.classList.add('active');
+    if (activeZone) {
+      const mapZone = document.querySelector(`.zone[data-zone="${activeZone}"]`);
+      if (mapZone) mapZone.classList.add('active');
+    }
     filterData();
   });
 }
@@ -569,8 +575,7 @@ function filterData() {
   if (searchQuery) {
     const q = searchQuery.toLowerCase();
     d = d.filter(r =>
-      (r.order_no || '').toLowerCase().includes(q) ||
-      (r.fulfillment_id || '').toLowerCase().includes(q) ||
+      (r.product_code || '').toLowerCase().includes(q) ||
       (r.item_description || '').toLowerCase().includes(q)
     );
   }
