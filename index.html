@@ -430,7 +430,7 @@ tbody td:first-child{font-family:var(--ff-head);font-size:13px;font-weight:600;
     <div class="controls">
       <div class="search-wrap">
         <span class="search-icon">🔍</span>
-        <input type="text" id="searchInput" placeholder="ค้นหา Product Code หรือชื่อสินค้า…">
+        <input type="text" id="searchInput" placeholder="ค้นหา Order No, Fulfillment ID หรือชื่อสินค้า…">
       </div>
       <div class="filter-group" id="zoneFilters"></div>
       <div class="results-info" id="resultsInfo">— items</div>
@@ -440,7 +440,8 @@ tbody td:first-child{font-family:var(--ff-head);font-size:13px;font-weight:600;
       <table>
         <thead>
           <tr>
-            <th>Product Code</th>
+            <th>Order No</th>
+            <th>Fulfillment ID</th>
             <th>Description</th>
             <th>Zone / Bin</th>
             <th>On Hand</th>
@@ -527,7 +528,8 @@ function renderTable(data) {
 
   tbody.innerHTML = data.map(r => `
     <tr>
-      <td><span style="font-family:var(--ff-head);font-size:12px;letter-spacing:.06em;color:var(--steel-500);">${r.product_code || '—'}</span></td>
+      <td>${r.order_number || '—'}</td>
+      <td><span style="font-family:var(--ff-head);font-size:12px;letter-spacing:.06em;color:var(--steel-500);">${r.fulfillment_id || '—'}</span></td>
       <td>${r.item_description || '—'}</td>
       <td>
         <span class="zone-chip ${getZoneChipClass(r.zone)}">${getZoneDisplay(r.zone)}</span>
@@ -575,7 +577,8 @@ function filterData() {
   if (searchQuery) {
     const q = searchQuery.toLowerCase();
     d = d.filter(r =>
-      (r.product_code || '').toLowerCase().includes(q) ||
+      (r.order_number || '').toLowerCase().includes(q) ||
+      (r.fulfillment_id || '').toLowerCase().includes(q) ||
       (r.item_description || '').toLowerCase().includes(q)
     );
   }
