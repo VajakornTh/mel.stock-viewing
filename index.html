@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>OFS-WMS · Stock Viewer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700;800&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ── Design Tokens ── */
+:root {
+  --bronze-100:#F4DEBE; --bronze-200:#E9C193; --bronze-300:#D49B66;
+  --bronze-400:#B97A45; --bronze-500:#8C5126; --bronze-600:#6A3A18;
+  --bronze-700:#4A270F;
+  --ink-900:#0E1A2B; --ink-800:#16263D; --ink-700:#1F324C; --ink-600:#2C415C;
+  --steel-900:#1A1714; --steel-800:#2A2520; --steel-700:#3A332C;
+  --steel-500:#6B6058; --steel-300:#B5A99E; --steel-100:#E8E0D6;
+  --cargo-red:#D63A24; --cargo-orange:#E87726; --cargo-yellow:#F1B233;
+  --cargo-green:#4A8B3D; --cargo-blue:#2470B8; --cargo-teal:#2E89A8;
+  --surface:#FDFAF6; --border:rgba(14,26,43,0.12);
+  --ff-head:"Barlow Condensed",sans-serif; --ff-body:"Barlow",sans-serif;
+  --r-md:12px; --r-lg:18px; --r-pill:999px;
+  --shadow-card:0 1px 0 rgba(14,26,43,.06),0 8px 24px -12px rgba(14,26,43,.25);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:16px}
+body{background:var(--steel-100);font-family:var(--ff-body);color:var(--ink-900);min-height:100vh}
+
+/* ── Header ── */
+.site-header{
+  background:var(--steel-900);
+  padding:16px 24px;
+  display:flex;align-items:center;justify-content:space-between;
+  border-bottom:2px solid var(--bronze-500);
+}
+.header-brand{display:flex;align-items:center;gap:12px}
+.mcu-stamp{
+  background:linear-gradient(180deg,var(--bronze-300),var(--bronze-500));
+  border:2px solid var(--bronze-700);border-radius:var(--r-pill);
+  padding:4px 12px;font-family:var(--ff-head);font-size:11px;
+  font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-900);
+}
+.header-title{font-family:var(--ff-head);font-size:22px;font-weight:800;
+  letter-spacing:.04em;text-transform:uppercase;color:var(--bronze-200);}
+.header-sub{font-family:var(--ff-head);font-size:11px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--steel-500);margin-top:2px;}
+.header-meta{text-align:right}
+.last-update{font-family:var(--ff-head);font-size:11px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--steel-500);}
+.last-update span{color:var(--bronze-300);}
+
+/* ── Main layout ── */
+.main{max-width:1280px;margin:0 auto;padding:24px 20px;display:flex;flex-direction:column;gap:20px;}
+
+/* ── Section card ── */
+.card{background:#fff;border-radius:var(--r-lg);box-shadow:var(--shadow-card);overflow:hidden;}
+.card-head{
+  padding:14px 20px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:10px;
+}
+.card-head-label{
+  font-family:var(--ff-head);font-size:11px;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--bronze-500);
+}
+.card-head-title{font-family:var(--ff-head);font-size:18px;font-weight:700;color:var(--ink-900);}
+
+/* ── Warehouse Map ── */
+.map-wrap{padding:20px;}
+.map-legend{display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap;}
+.legend-item{display:flex;align-items:center;gap:6px;
+  font-family:var(--ff-head);font-size:11px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--steel-500);}
+.legend-dot{width:12px;height:12px;border-radius:3px;border:2px solid var(--ink-900);}
+.legend-dot.empty{background:var(--surface);}
+.legend-dot.has-items{background:var(--bronze-300);}
+.legend-dot.full{background:var(--bronze-500);}
+.legend-dot.unassigned{background:var(--steel-100);}
+
+.wh-grid{
+  display:grid;
+  grid-template-columns:80px repeat(8,1fr) 72px;
+  grid-template-rows:56px 72px 72px 56px;
+  gap:5px;
+}
+
+/* Zone base style */
+.zone{
+  border:2px solid var(--ink-900);border-radius:var(--r-md);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  cursor:pointer;transition:transform .15s,box-shadow .15s;
+  position:relative;overflow:hidden;
+  font-family:var(--ff-head);user-select:none;
+  background:var(--surface);
+}
+.zone:hover{transform:scale(1.04);box-shadow:0 4px 16px rgba(14,26,43,.2);}
+.zone.active{border-color:var(--bronze-500);box-shadow:0 0 0 3px var(--bronze-300);}
+.zone-label{font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--steel-500);}
+.zone-name{font-size:15px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--ink-900);}
+.zone-count{
+  position:absolute;top:5px;right:7px;
+  font-size:10px;font-weight:700;color:var(--bronze-600);
+  background:var(--bronze-100);border-radius:var(--r-pill);
+  padding:1px 6px;
+}
+
+/* Fill states */
+.zone.state-empty{background:#FDFAF6;}
+.zone.state-has{background:linear-gradient(160deg,#FBF1E5 60%,var(--bronze-100));}
+.zone.state-full{background:linear-gradient(160deg,var(--bronze-100) 30%,var(--bronze-200));}
+.zone.state-unassigned{background:var(--steel-100);cursor:default;}
+.zone.state-unassigned:hover{transform:none;box-shadow:none;}
+.zone.state-inactive{background:#F4F4F4;border-color:rgba(14,26,43,.1);cursor:default;}
+.zone.state-inactive .zone-label,.zone.state-inactive .zone-name{color:var(--steel-300);}
+.zone.state-inactive:hover{transform:none;box-shadow:none;}
+
+/* Grid positions */
+.z-ra01{grid-column:1;grid-row:1;}
+.z-r1{grid-column:2;grid-row:1;}
+.z-r2{grid-column:3;grid-row:1;}
+.z-r3{grid-column:4;grid-row:1;}
+.z-r4{grid-column:5;grid-row:1;}
+.z-r5{grid-column:6;grid-row:1;}
+.z-r6{grid-column:7;grid-row:1;}
+.z-r7{grid-column:8;grid-row:1;}
+.z-r8{grid-column:9;grid-row:1;}
+.z-r9{grid-column:10;grid-row:1;}
+.z-wall3{grid-column:10;grid-row:1/5;border-radius:var(--r-md);}
+.z-wall3 .zone-label,.z-wall3 .zone-name{writing-mode:vertical-rl;transform:rotate(180deg);}
+.z-r9{display:none;}
+.z-wall2{display:none;}
+
+.z-ra02{grid-column:1;grid-row:2;}
+.z-a01{grid-column:2/6;grid-row:2/4;}
+.z-a01 .zone-name{font-size:22px;}
+.z-a02{grid-column:6/10;grid-row:2/4;}
+.z-a02 .zone-name{font-size:22px;}
+
+.z-ra03{grid-column:1;grid-row:3;}
+
+.z-ra04{grid-column:1;grid-row:4;}
+.z-loading{grid-column:2/8;grid-row:4;background:var(--steel-100);border-color:rgba(14,26,43,.15);}
+.z-loading .zone-label,.z-loading .zone-name{color:var(--steel-500);}
+.z-loading:hover{transform:none;box-shadow:none;}
+.z-wall1{grid-column:8/10;grid-row:4;}
+.z-wall2{grid-column:10;grid-row:4;}
+
+/* ── Stats Row ── */
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+.stat-card{
+  background:#fff;border-radius:var(--r-lg);
+  padding:16px 20px;box-shadow:var(--shadow-card);
+  border-left:3px solid var(--bronze-400);
+}
+.stat-label{font-family:var(--ff-head);font-size:10px;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--steel-500);}
+.stat-value{font-family:var(--ff-head);font-size:28px;font-weight:800;color:var(--ink-900);margin-top:2px;}
+.stat-sub{font-family:var(--ff-head);font-size:11px;color:var(--steel-500);margin-top:2px;}
+
+/* ── Controls ── */
+.controls{padding:16px 20px;display:flex;gap:12px;flex-wrap:wrap;align-items:center;border-bottom:1px solid var(--border);}
+.search-wrap{flex:1;min-width:200px;position:relative;}
+.search-wrap input{
+  width:100%;padding:9px 12px 9px 36px;border:2px solid var(--steel-300);
+  border-radius:var(--r-md);font-family:var(--ff-body);font-size:14px;
+  background:var(--surface);transition:border-color .15s;outline:none;
+}
+.search-wrap input:focus{border-color:var(--bronze-400);}
+.search-icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);
+  color:var(--steel-500);font-size:14px;}
+.filter-group{display:flex;gap:8px;flex-wrap:wrap;}
+.filter-btn{
+  font-family:var(--ff-head);font-size:11px;font-weight:700;letter-spacing:.1em;
+  text-transform:uppercase;padding:7px 14px;border:2px solid var(--steel-300);
+  border-radius:var(--r-pill);background:transparent;cursor:pointer;
+  color:var(--steel-500);transition:all .15s;
+}
+.filter-btn:hover,.filter-btn.active{
+  border-color:var(--bronze-500);background:var(--bronze-100);color:var(--bronze-600);
+}
+.results-info{font-family:var(--ff-head);font-size:11px;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--steel-500);margin-left:auto;}
+
+/* ── Table ── */
+.table-wrap{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;}
+thead th{
+  padding:10px 16px;font-family:var(--ff-head);font-size:11px;font-weight:700;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--steel-500);
+  border-bottom:2px solid var(--ink-900);text-align:left;white-space:nowrap;
+  background:#fff;
+}
+tbody tr{border-bottom:1px solid var(--border);transition:background .1s;}
+tbody tr:hover{background:var(--bronze-100);}
+tbody td{padding:11px 16px;font-size:14px;color:var(--ink-800);}
+tbody td:first-child{font-family:var(--ff-head);font-size:13px;font-weight:600;
+  letter-spacing:.04em;color:var(--ink-900);}
+
+/* Zone chip */
+.zone-chip{
+  display:inline-flex;align-items:center;
+  font-family:var(--ff-head);font-size:10px;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;
+  padding:3px 9px;border-radius:var(--r-pill);
+  border:1.5px solid var(--ink-900);
+}
+.chip-a{background:linear-gradient(135deg,var(--bronze-100),var(--bronze-200));color:var(--bronze-600);}
+.chip-b{background:linear-gradient(135deg,#E8F4E8,#C8E6C8);color:#2E7D32;}
+.chip-rack{background:linear-gradient(135deg,#E3F2FD,#BBDEFB);color:#1565C0;}
+.chip-other{background:var(--steel-100);color:var(--steel-500);}
+
+/* Status chip */
+.status-chip{
+  display:inline-flex;align-items:center;gap:5px;
+  font-family:var(--ff-head);font-size:10px;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;
+  padding:3px 9px;border-radius:var(--r-pill);
+}
+.status-chip::before{content:'';width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.s-delivered{background:#E8F5E9;color:#2E7D32;border:1.5px solid #A5D6A7;}
+.s-delivered::before{background:#4A8B3D;}
+.s-pending{background:#FFF8E1;color:#F57F17;border:1.5px solid #FFE082;}
+.s-pending::before{background:#F1B233;}
+.s-cancelled{background:#FFEBEE;color:#C62828;border:1.5px solid #FFCDD2;}
+.s-cancelled::before{background:#D63A24;}
+.s-other{background:var(--steel-100);color:var(--steel-500);border:1.5px solid var(--steel-300);}
+.s-other::before{background:var(--steel-300);}
+
+.qty-cell{font-family:var(--ff-head);font-size:16px;font-weight:700;}
+.qty-zero{color:var(--steel-300);}
+.qty-has{color:var(--bronze-500);}
+
+.empty-state{padding:60px 20px;text-align:center;}
+.empty-state p{font-family:var(--ff-head);font-size:16px;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--steel-400);}
+
+/* ── Loading ── */
+.loading-overlay{
+  position:fixed;inset:0;background:rgba(26,23,20,.85);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  z-index:999;gap:16px;
+}
+.spinner{
+  width:44px;height:44px;border:3px solid var(--bronze-700);
+  border-top-color:var(--bronze-300);border-radius:50%;
+  animation:spin .8s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{font-family:var(--ff-head);font-size:13px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--bronze-300);}
+
+/* ── Responsive ── */
+@media(max-width:768px){
+  .wh-grid{grid-template-columns:60px repeat(4,1fr) 50px;grid-template-rows:auto;}
+  .z-a01{grid-column:2/4;}.z-a02{grid-column:4/6;}
+  .z-r5,.z-r6,.z-r7,.z-r8{display:none;}
+  .stats-row{grid-template-columns:1fr 1fr;}
+  .results-info{display:none;}
+}
+</style>
+</head>
+<body>
+
+<div class="loading-overlay" id="loading">
+  <div class="spinner"></div>
+  <div class="loading-text">Loading stock data…</div>
+</div>
+
+<!-- Header -->
+<header class="site-header">
+  <div class="header-brand">
+    <div class="mcu-stamp">MCU</div>
+    <div>
+      <div class="header-title">OFS-WMS · Stock Viewer</div>
+      <div class="header-sub">Warehouse Storage Map & Inventory</div>
+    </div>
+  </div>
+  <div class="header-meta">
+    <div class="last-update">Updated: <span id="lastUpdate">—</span></div>
+    <div class="last-update">Refreshed daily 06:00</div>
+  </div>
+</header>
+
+<main class="main">
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">Total Items</div>
+      <div class="stat-value" id="statTotal">—</div>
+      <div class="stat-sub">in stock_items</div>
+    </div>
+    <div class="stat-card" style="border-left-color:var(--cargo-green)">
+      <div class="stat-label">Assigned Zones</div>
+      <div class="stat-value" id="statAssigned">—</div>
+      <div class="stat-sub">A-Dynamic + B-Dynamic + RACK</div>
+    </div>
+    <div class="stat-card" style="border-left-color:var(--bronze-500)">
+      <div class="stat-label">On Hand (Total)</div>
+      <div class="stat-value" id="statOnHand">—</div>
+      <div class="stat-sub">units</div>
+    </div>
+    <div class="stat-card" style="border-left-color:var(--steel-500)">
+      <div class="stat-label">Unassigned</div>
+      <div class="stat-value" id="statUnassigned">—</div>
+      <div class="stat-sub">no bin location</div>
+    </div>
+  </div>
+
+  <!-- Warehouse Map -->
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <div class="card-head-label">Warehouse Layout</div>
+        <div class="card-head-title">Storage Map</div>
+      </div>
+      <div class="map-legend" style="margin-left:auto;margin-bottom:0">
+        <div class="legend-item"><div class="legend-dot empty"></div>Empty</div>
+        <div class="legend-item"><div class="legend-dot has-items"></div>Has Items</div>
+        <div class="legend-item"><div class="legend-dot full"></div>Full</div>
+        <div class="legend-item"><div class="legend-dot unassigned"></div>N/A</div>
+      </div>
+    </div>
+    <div class="map-wrap">
+      <div class="wh-grid" id="warehouseMap">
+
+        <!-- Row 1: RA-01 + Rack Units + Wall-3 -->
+        <div class="zone z-ra01 state-inactive" data-zone="RA-01">
+          <div class="zone-label">RA Zone</div>
+          <div class="zone-name">01</div>
+        </div>
+        <div class="zone z-r1 state-inactive" data-zone="R1">
+          <div class="zone-label">Rack</div>
+          <div class="zone-name">R1</div>
+        </div>
+        <div class="zone z-r2 state-inactive" data-zone="R2">
+          <div class="zone-label">Rack</div>
+          <div class="zone-name">R2</div>
+        </div>
+        <div class="zone z-r3 state-inactive" data-zone="R3">
+          <div class="zone-label">Rack</div>
+          <div class="zone-name">R3</div>
+        </div>
+        <div class="zone z-r4 state-inactive" data-zone="R4">
+          <div class="zone-label">Rack</div>
+          <div class="zone-name">R4</div>
+        </div>
+        <div class="zone z-r5" data-zone="RACK-05">
+          <div class="zone-label">Rack</div>
+          <div class="zone-name">R5</div>
+          <div class="zone-count" id="count-RACK-05">0</div>
+        </div>
+        <div class="zone z-r6" data-zone="RACK-06">
+          <div class="zone-label">Rack</div>
+          <div class="zone-name">R6</div>
+          <div class="zone-count" id="count-RACK-06">0</div>
+        </div>
+        <div class="zone z-r7" data-zone="RACK-07">
+          <div class="zone-label">Rack</div>
+          <div class="zone-name">R7</div>
+          <div class="zone-count" id="count-RACK-07">0</div>
+        </div>
+        <div class="zone z-r8 state-inactive" data-zone="R8">
+          <div class="zone-label">Rack</div>
+          <div class="zone-name">R8</div>
+        </div>
+        <div class="zone z-r9 state-inactive" data-zone="R9">
+          <div class="zone-label">Rack</div>
+          <div class="zone-name">R9</div>
+        </div>
+        <div class="zone z-wall3 state-inactive" data-zone="WALL-03">
+          <div class="zone-label">Wall</div>
+          <div class="zone-name">W-03</div>
+        </div>
+
+        <!-- Row 2-3: RA-02/03 + Block A-01 + Block A-02 -->
+        <div class="zone z-ra02 state-inactive" data-zone="RA-02">
+          <div class="zone-label">RA Zone</div>
+          <div class="zone-name">02</div>
+        </div>
+        <div class="zone z-a01" data-zone="A-Dynamic">
+          <div class="zone-label">Zone · A</div>
+          <div class="zone-name">Dynamic</div>
+          <div class="zone-count" id="count-A-Dynamic">0</div>
+        </div>
+        <div class="zone z-a02" data-zone="B-Dynamic">
+          <div class="zone-label">Zone · B</div>
+          <div class="zone-name">Dynamic</div>
+          <div class="zone-count" id="count-B-Dynamic">0</div>
+        </div>
+
+        <div class="zone z-ra03 state-inactive" data-zone="RA-03">
+          <div class="zone-label">RA Zone</div>
+          <div class="zone-name">03</div>
+        </div>
+
+        <!-- Row 4: RA-04 + Loading + Wall-1/2 -->
+        <div class="zone z-ra04 state-inactive" data-zone="RA-04">
+          <div class="zone-label">RA Zone</div>
+          <div class="zone-name">04</div>
+        </div>
+        <div class="zone z-loading state-inactive" data-zone="LOADING" style="cursor:default">
+          <div class="zone-label">Loading / Dropping</div>
+          <div class="zone-name" style="font-size:13px">ENTRY · EXIT</div>
+        </div>
+        <div class="zone z-wall1 state-inactive" data-zone="WALL-01">
+          <div class="zone-label">Wall</div>
+          <div class="zone-name">W-01</div>
+        </div>
+        <div class="zone z-wall2 state-inactive" data-zone="WALL-02">
+          <div class="zone-label">Wall</div>
+          <div class="zone-name">W-02</div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Stock List -->
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <div class="card-head-label">Inventory</div>
+        <div class="card-head-title">Stock List</div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="searchInput" placeholder="ค้นหา product code หรือชื่อสินค้า…">
+      </div>
+      <div class="filter-group" id="zoneFilters">
+        <button class="filter-btn active" data-zone="ALL">All Zones</button>
+        <button class="filter-btn" data-zone="A-Dynamic">A-Dynamic</button>
+        <button class="filter-btn" data-zone="B-Dynamic">B-Dynamic</button>
+        <button class="filter-btn" data-zone="RACK-05">RACK-05</button>
+        <button class="filter-btn" data-zone="RACK-06">RACK-06</button>
+        <button class="filter-btn" data-zone="RACK-07">RACK-07</button>
+        <button class="filter-btn" data-zone="Unassigned">Unassigned</button>
+      </div>
+      <div class="results-info" id="resultsInfo">— items</div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Product Code</th>
+            <th>Description</th>
+            <th>Zone</th>
+            <th>Bin Slot</th>
+            <th>On Hand</th>
+            <th>Available</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="stockTable"></tbody>
+      </table>
+      <div class="empty-state" id="emptyState" style="display:none">
+        <p>No items found</p>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+const SUPABASE_URL = 'https://yipiedpvlpmpolqgbbvs.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlpcGllZHB2bHBtcG9scWdiYnZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4NzU1MjgsImV4cCI6MjA5NDQ1MTUyOH0.QrXO8vToN8qAo4M0R4iGKgLhQ1fhLr63bOWoOb_gBbk';
+
+let allData = [];
+let activeZone = 'ALL';
+let searchQuery = '';
+
+async function loadData() {
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/stock_items?select=*&order=zone.asc,item_description.asc&limit=2000`,
+    { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+  );
+  if (!res.ok) throw new Error('Failed to fetch: ' + res.status);
+  return res.json();
+}
+
+function getZoneChipClass(zone) {
+  if (!zone) return 'chip-other';
+  if (zone.startsWith('A-')) return 'chip-a';
+  if (zone.startsWith('B-')) return 'chip-b';
+  if (zone.startsWith('RACK')) return 'chip-rack';
+  return 'chip-other';
+}
+
+function getZoneDisplay(zone) {
+  if (!zone) return '—';
+  if (zone === 'A-Dynamic') return 'A';
+  if (zone === 'B-Dynamic') return 'B';
+  return zone;
+}
+
+function getBinSlotDisplay(zone, bin_slot) {
+  if (!bin_slot) return '—';
+  if (zone === 'A-Dynamic' || zone === 'B-Dynamic') return 'Dynamic';
+  return bin_slot;
+}
+
+function getStatusChipClass(status) {
+  if (!status || status === '-') return 's-other';
+  const s = status.toUpperCase();
+  if (s.includes('DELIVER')) return 's-delivered';
+  if (s.includes('PENDING') || s.includes('RECEIV')) return 's-pending';
+  if (s.includes('CANCEL')) return 's-cancelled';
+  return 's-other';
+}
+
+function getStatusLabel(status) {
+  if (!status || status === '-') return '—';
+  return status.replace(/_/g,' ');
+}
+
+function renderTable(data) {
+  const tbody = document.getElementById('stockTable');
+  const empty = document.getElementById('emptyState');
+  const info  = document.getElementById('resultsInfo');
+
+  if (!data.length) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    info.textContent = '0 items';
+    return;
+  }
+  empty.style.display = 'none';
+  info.textContent = `${data.length.toLocaleString()} items`;
+
+  tbody.innerHTML = data.map(r => `
+    <tr>
+      <td>${r.product_code || '—'}</td>
+      <td>${r.item_description || '—'}</td>
+      <td><span class="zone-chip ${getZoneChipClass(r.zone)}">${getZoneDisplay(r.zone)}</span></td>
+      <td><span style="font-family:var(--ff-head);font-size:12px;letter-spacing:.06em;">${getBinSlotDisplay(r.zone, r.bin_slot)}</span></td>
+      <td class="qty-cell ${r.on_hand > 0 ? 'qty-has' : 'qty-zero'}">${r.on_hand ?? 0}</td>
+      <td class="qty-cell ${r.available > 0 ? 'qty-has' : 'qty-zero'}">${r.available ?? 0}</td>
+      <td><span class="status-chip ${getStatusChipClass(r.status)}">${getStatusLabel(r.status)}</span></td>
+    </tr>
+  `).join('');
+}
+
+function filterData() {
+  let d = allData;
+  if (activeZone !== 'ALL') d = d.filter(r => r.zone === activeZone);
+  if (searchQuery) {
+    const q = searchQuery.toLowerCase();
+    d = d.filter(r =>
+      (r.product_code || '').toLowerCase().includes(q) ||
+      (r.item_description || '').toLowerCase().includes(q)
+    );
+  }
+  renderTable(d);
+}
+
+function updateMapZones(data) {
+  const zones = ['A-Dynamic','B-Dynamic','RACK-05','RACK-06','RACK-07'];
+  zones.forEach(zone => {
+    const count = data.filter(r => r.zone === zone).length;
+    const el = document.querySelector(`[data-zone="${zone}"]`);
+    const countEl = document.getElementById(`count-${zone}`);
+    if (!el) return;
+    if (countEl) countEl.textContent = count;
+    el.classList.remove('state-empty','state-has','state-full');
+    if (count === 0) el.classList.add('state-empty');
+    else if (count < 20) el.classList.add('state-has');
+    else el.classList.add('state-full');
+  });
+}
+
+function updateStats(data) {
+  document.getElementById('statTotal').textContent = data.length.toLocaleString();
+  document.getElementById('statAssigned').textContent =
+    data.filter(r => r.zone && r.zone !== 'Unassigned').length.toLocaleString();
+  document.getElementById('statOnHand').textContent =
+    data.reduce((s,r) => s + (r.on_hand||0), 0).toLocaleString();
+  document.getElementById('statUnassigned').textContent =
+    data.filter(r => r.zone === 'Unassigned').length.toLocaleString();
+
+  const latest = data.reduce((max,r) =>
+    r.updated_at > max ? r.updated_at : max, '');
+  if (latest) {
+    const d = new Date(latest);
+    document.getElementById('lastUpdate').textContent =
+      d.toLocaleDateString('th-TH',{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+  }
+}
+
+// Zone click → filter
+document.querySelectorAll('[data-zone]').forEach(el => {
+  if (el.classList.contains('state-inactive')) return;
+  el.addEventListener('click', () => {
+    const zone = el.dataset.zone;
+    activeZone = zone;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    const btn = document.querySelector(`.filter-btn[data-zone="${zone}"]`);
+    if (btn) btn.classList.add('active');
+    document.querySelectorAll('.zone').forEach(z => z.classList.remove('active'));
+    el.classList.add('active');
+    filterData();
+  });
+});
+
+// Filter buttons
+document.getElementById('zoneFilters').addEventListener('click', e => {
+  const btn = e.target.closest('.filter-btn');
+  if (!btn) return;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  activeZone = btn.dataset.zone;
+  document.querySelectorAll('.zone').forEach(z => z.classList.remove('active'));
+  if (activeZone !== 'ALL') {
+    const mapZone = document.querySelector(`.zone[data-zone="${activeZone}"]`);
+    if (mapZone) mapZone.classList.add('active');
+  }
+  filterData();
+});
+
+// Search
+document.getElementById('searchInput').addEventListener('input', e => {
+  searchQuery = e.target.value.trim();
+  filterData();
+});
+
+// Init
+(async () => {
+  try {
+    allData = await loadData();
+    updateStats(allData);
+    updateMapZones(allData);
+    filterData();
+  } catch(err) {
+    document.getElementById('stockTable').innerHTML =
+      `<tr><td colspan="7" style="padding:40px;text-align:center;color:var(--cargo-red);font-family:var(--ff-head);letter-spacing:.08em;text-transform:uppercase;">Error loading data: ${err.message}</td></tr>`;
+  } finally {
+    document.getElementById('loading').style.display = 'none';
+  }
+})();
+</script>
+</body>
+</html>
