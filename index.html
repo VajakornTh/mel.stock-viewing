@@ -79,8 +79,8 @@ body{background:var(--steel-100);font-family:var(--ff-body);color:var(--ink-900)
 
 .wh-grid{
   display:grid;
-  grid-template-columns:80px repeat(8,1fr) 72px;
-  grid-template-rows:56px 72px 72px 56px;
+  grid-template-columns:80px repeat(7,1fr) 72px;
+  grid-template-rows:56px 100px 100px 56px;
   gap:5px;
 }
 
@@ -125,27 +125,26 @@ body{background:var(--steel-100);font-family:var(--ff-body);color:var(--ink-900)
 .z-r5{grid-column:6;grid-row:1;}
 .z-r6{grid-column:7;grid-row:1;}
 .z-r7{grid-column:8;grid-row:1;}
-.z-r8{grid-column:9;grid-row:1;}
-.z-r9{grid-column:10;grid-row:1;}
-.z-wall3{grid-column:10;grid-row:1/5;border-radius:var(--r-md);}
-.z-wall3 .zone-label,.z-wall3 .zone-name{writing-mode:vertical-rl;transform:rotate(180deg);}
+.z-r8{display:none;}
 .z-r9{display:none;}
+.z-wall3{grid-column:9;grid-row:1/5;border-radius:var(--r-md);}
+.z-wall3 .zone-label,.z-wall3 .zone-name{writing-mode:vertical-rl;transform:rotate(180deg);}
 .z-wall2{display:none;}
 
 .z-ra02{grid-column:1;grid-row:2;}
-.z-a01{grid-column:2/6;grid-row:2/4;}
-.z-a01 .zone-name{font-size:22px;}
-.z-a02{grid-column:6/10;grid-row:2/4;}
-.z-a02 .zone-name{font-size:22px;}
+.z-a01{grid-column:2/9;grid-row:2;}
+.z-a01 .zone-name{font-size:24px;}
 
 .z-ra03{grid-column:1;grid-row:3;}
+.z-a02{grid-column:2/9;grid-row:3;}
+.z-a02 .zone-name{font-size:24px;}
 
 .z-ra04{grid-column:1;grid-row:4;}
 .z-loading{grid-column:2/8;grid-row:4;background:var(--steel-100);border-color:rgba(14,26,43,.15);}
 .z-loading .zone-label,.z-loading .zone-name{color:var(--steel-500);}
 .z-loading:hover{transform:none;box-shadow:none;}
-.z-wall1{grid-column:8/10;grid-row:4;}
-.z-wall2{grid-column:10;grid-row:4;}
+.z-wall1{grid-column:8/9;grid-row:4;}
+.z-wall2{grid-column:9;grid-row:4;display:none;}
 
 /* ── Stats Row ── */
 .stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
@@ -254,8 +253,9 @@ tbody td:first-child{font-family:var(--ff-head);font-size:13px;font-weight:600;
 /* ── Responsive ── */
 @media(max-width:768px){
   .wh-grid{grid-template-columns:60px repeat(4,1fr) 50px;grid-template-rows:auto;}
-  .z-a01{grid-column:2/4;}.z-a02{grid-column:4/6;}
-  .z-r5,.z-r6,.z-r7,.z-r8{display:none;}
+  .z-a01{grid-column:2/6;grid-row:2;}
+  .z-a02{grid-column:2/6;grid-row:3;}
+  .z-r4,.z-r5,.z-r6,.z-r7{display:none;}
   .stats-row{grid-template-columns:1fr 1fr;}
   .results-info{display:none;}
 }
@@ -430,17 +430,9 @@ tbody td:first-child{font-family:var(--ff-head);font-size:13px;font-weight:600;
     <div class="controls">
       <div class="search-wrap">
         <span class="search-icon">🔍</span>
-        <input type="text" id="searchInput" placeholder="ค้นหา product code หรือชื่อสินค้า…">
+        <input type="text" id="searchInput" placeholder="ค้นหา Order No, Fulfillment ID หรือชื่อสินค้า…">
       </div>
-      <div class="filter-group" id="zoneFilters">
-        <button class="filter-btn active" data-zone="ALL">All Zones</button>
-        <button class="filter-btn" data-zone="A-Dynamic">A-Dynamic</button>
-        <button class="filter-btn" data-zone="B-Dynamic">B-Dynamic</button>
-        <button class="filter-btn" data-zone="RACK-05">RACK-05</button>
-        <button class="filter-btn" data-zone="RACK-06">RACK-06</button>
-        <button class="filter-btn" data-zone="RACK-07">RACK-07</button>
-        <button class="filter-btn" data-zone="Unassigned">Unassigned</button>
-      </div>
+      <div class="filter-group" id="zoneFilters"></div>
       <div class="results-info" id="resultsInfo">— items</div>
     </div>
 
@@ -448,12 +440,12 @@ tbody td:first-child{font-family:var(--ff-head);font-size:13px;font-weight:600;
       <table>
         <thead>
           <tr>
-            <th>Product Code</th>
+            <th>Order No</th>
+            <th>Fulfillment ID</th>
             <th>Description</th>
             <th>Zone</th>
-            <th>Bin Slot</th>
             <th>On Hand</th>
-            <th>Available</th>
+            <th>Target Count</th>
             <th>Status</th>
           </tr>
         </thead>
@@ -472,7 +464,7 @@ const SUPABASE_URL = 'https://yipiedpvlpmpolqgbbvs.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlpcGllZHB2bHBtcG9scWdiYnZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4NzU1MjgsImV4cCI6MjA5NDQ1MTUyOH0.QrXO8vToN8qAo4M0R4iGKgLhQ1fhLr63bOWoOb_gBbk';
 
 let allData = [];
-let activeZone = 'ALL';
+let activeZone = null;
 let searchQuery = '';
 
 async function loadData() {
@@ -535,24 +527,50 @@ function renderTable(data) {
 
   tbody.innerHTML = data.map(r => `
     <tr>
-      <td>${r.product_code || '—'}</td>
+      <td>${r.order_no || '—'}</td>
+      <td><span style="font-family:var(--ff-head);font-size:12px;letter-spacing:.06em;color:var(--steel-500);">${r.fulfillment_id || '—'}</span></td>
       <td>${r.item_description || '—'}</td>
       <td><span class="zone-chip ${getZoneChipClass(r.zone)}">${getZoneDisplay(r.zone)}</span></td>
-      <td><span style="font-family:var(--ff-head);font-size:12px;letter-spacing:.06em;">${getBinSlotDisplay(r.zone, r.bin_slot)}</span></td>
       <td class="qty-cell ${r.on_hand > 0 ? 'qty-has' : 'qty-zero'}">${r.on_hand ?? 0}</td>
-      <td class="qty-cell ${r.available > 0 ? 'qty-has' : 'qty-zero'}">${r.available ?? 0}</td>
+      <td class="qty-cell ${r.target_count > 0 ? 'qty-has' : 'qty-zero'}">${r.target_count ?? '—'}</td>
       <td><span class="status-chip ${getStatusChipClass(r.status)}">${getStatusLabel(r.status)}</span></td>
     </tr>
   `).join('');
 }
 
+function buildZoneFilters(data) {
+  const zones = [...new Set(
+    data.map(r => r.zone).filter(z => z && z !== 'Unassigned')
+  )].sort();
+
+  activeZone = zones[0] || null;
+
+  const container = document.getElementById('zoneFilters');
+  container.innerHTML = zones.map((z, i) => `
+    <button class="filter-btn${i === 0 ? ' active' : ''}" data-zone="${z}">${z.replace('-Dynamic',' Dynamic').toUpperCase()}</button>
+  `).join('');
+
+  container.addEventListener('click', e => {
+    const btn = e.target.closest('.filter-btn');
+    if (!btn) return;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeZone = btn.dataset.zone;
+    document.querySelectorAll('.zone').forEach(z => z.classList.remove('active'));
+    const mapZone = document.querySelector(`.zone[data-zone="${activeZone}"]`);
+    if (mapZone) mapZone.classList.add('active');
+    filterData();
+  });
+}
+
 function filterData() {
   let d = allData;
-  if (activeZone !== 'ALL') d = d.filter(r => r.zone === activeZone);
+  if (activeZone) d = d.filter(r => r.zone === activeZone);
   if (searchQuery) {
     const q = searchQuery.toLowerCase();
     d = d.filter(r =>
-      (r.product_code || '').toLowerCase().includes(q) ||
+      (r.order_no || '').toLowerCase().includes(q) ||
+      (r.fulfillment_id || '').toLowerCase().includes(q) ||
       (r.item_description || '').toLowerCase().includes(q)
     );
   }
@@ -592,34 +610,19 @@ function updateStats(data) {
   }
 }
 
-// Zone click → filter
+// Zone map click → filter
 document.querySelectorAll('[data-zone]').forEach(el => {
   if (el.classList.contains('state-inactive')) return;
   el.addEventListener('click', () => {
     const zone = el.dataset.zone;
     activeZone = zone;
-    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-    const btn = document.querySelector(`.filter-btn[data-zone="${zone}"]`);
-    if (btn) btn.classList.add('active');
+    document.querySelectorAll('.filter-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.zone === zone);
+    });
     document.querySelectorAll('.zone').forEach(z => z.classList.remove('active'));
     el.classList.add('active');
     filterData();
   });
-});
-
-// Filter buttons
-document.getElementById('zoneFilters').addEventListener('click', e => {
-  const btn = e.target.closest('.filter-btn');
-  if (!btn) return;
-  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  activeZone = btn.dataset.zone;
-  document.querySelectorAll('.zone').forEach(z => z.classList.remove('active'));
-  if (activeZone !== 'ALL') {
-    const mapZone = document.querySelector(`.zone[data-zone="${activeZone}"]`);
-    if (mapZone) mapZone.classList.add('active');
-  }
-  filterData();
 });
 
 // Search
@@ -634,6 +637,7 @@ document.getElementById('searchInput').addEventListener('input', e => {
     allData = await loadData();
     updateStats(allData);
     updateMapZones(allData);
+    buildZoneFilters(allData);
     filterData();
   } catch(err) {
     document.getElementById('stockTable').innerHTML =
