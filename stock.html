@@ -484,7 +484,8 @@ const SUPABASE_URL = 'https://yipiedpvlpmpolqgbbvs.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlpcGllZHB2bHBtcG9scWdiYnZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4NzU1MjgsImV4cCI6MjA5NDQ1MTUyOH0.QrXO8vToN8qAo4M0R4iGKgLhQ1fhLr63bOWoOb_gBbk';
 
 let allData = [];
-let activeZone = null;
+let activeStatus = null;   // tab filter (display_status)
+let activeGeoZone = null;  // map filter (zone)
 let searchQuery = '';
 
 const TABS = ['IN STOCK', 'RETURN', 'OVERSTAY', 'DELIVERED'];
@@ -598,12 +599,12 @@ function renderTable(data) {
 }
 
 function buildZoneFilters(data) {
-  activeZone = TABS[0];
+  activeStatus = TABS[0];
 
   const container = document.getElementById('zoneFilters');
   container.innerHTML = TABS.map((s, i) => {
     const count = data.filter(r => r.display_status === s).length;
-    return `<button class="filter-btn${i === 0 ? ' active' : ''}" data-zone="${s}">
+    return `<button class="filter-btn${i === 0 ? ' active' : ''}" data-status="${s}">
       ${s} <span style="font-size:10px;opacity:.7;">(${count})</span>
     </button>`;
   }).join('');
@@ -613,14 +614,17 @@ function buildZoneFilters(data) {
     if (!btn) return;
     document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    activeZone = btn.dataset.zone;
+    activeStatus = btn.dataset.status;
+    activeGeoZone = null;
+    document.querySelectorAll('.zone').forEach(z => z.classList.remove('active'));
     filterData();
   });
 }
 
 function filterData() {
   let d = allData;
-  if (activeZone) d = d.filter(r => r.display_status === activeZone);
+  if (activeStatus)  d = d.filter(r => r.display_status === activeStatus);
+  if (activeGeoZone) d = d.filter(r => r.zone === activeGeoZone);
   if (searchQuery) {
     const q = searchQuery.toLowerCase();
     d = d.filter(r =>
@@ -656,8 +660,7 @@ function updateStats(data) {
   document.getElementById('statUnassigned').textContent =
     data.filter(r => r.zone === 'Unassigned').length.toLocaleString();
 
-  const latest = data.reduce((max,r) =>
-    r.updated_at > max ? r.updated_at : max, '');
+  const latest = data.length > 0 ? data[0].refreshed_at : null;
   if (latest) {
     const d = new Date(latest);
     document.getElementById('lastUpdate').textContent =
@@ -665,15 +668,14 @@ function updateStats(data) {
   }
 }
 
-// Zone map click → filter
+// Zone map click → filter by geographic zone
 document.querySelectorAll('[data-zone]').forEach(el => {
   if (el.classList.contains('state-inactive')) return;
   el.addEventListener('click', () => {
     const zone = el.dataset.zone;
-    activeZone = zone;
-    document.querySelectorAll('.filter-btn').forEach(b => {
-      b.classList.toggle('active', b.dataset.zone === zone);
-    });
+    activeGeoZone = zone;
+    activeStatus = null;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.zone').forEach(z => z.classList.remove('active'));
     el.classList.add('active');
     filterData();
