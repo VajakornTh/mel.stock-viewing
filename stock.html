@@ -235,6 +235,26 @@ tbody td:first-child{font-family:var(--ff-head);font-size:13px;font-weight:600;
 .empty-state p{font-family:var(--ff-head);font-size:16px;letter-spacing:.06em;
   text-transform:uppercase;color:var(--steel-400);}
 
+/* ── Group-by-Order ── */
+.order-group-header td{
+  padding:10px 16px;
+  background:var(--steel-900);
+  color:var(--bronze-200);
+  font-family:var(--ff-head);font-size:12px;font-weight:700;
+  letter-spacing:.08em;text-transform:uppercase;
+  border-bottom:2px solid var(--bronze-700);
+  border-top:3px solid var(--bronze-600);
+}
+.order-group-header:first-child td{border-top:none;}
+.order-group-row td{background:rgba(14,26,43,.018);}
+.order-group-row:last-of-type td{border-bottom:1px solid var(--steel-100);}
+.group-meta{display:flex;align-items:center;gap:10px;float:right;}
+.group-order-id{font-size:14px;letter-spacing:.05em;color:var(--bronze-200);}
+.group-fulfillment{font-size:11px;font-weight:400;letter-spacing:.06em;color:var(--steel-400);margin-left:10px;}
+.group-count{font-size:11px;font-weight:400;color:var(--steel-400);}
+.group-cartons{font-size:13px;font-weight:700;color:var(--bronze-300);}
+.indent-arrow{color:var(--steel-300);font-size:12px;padding-left:28px;}
+
 /* ── Loading ── */
 .loading-overlay{
   position:fixed;inset:0;background:rgba(26,23,20,.85);
@@ -471,7 +491,7 @@ const TABS = ['IN STOCK', 'RETURN', 'OVERSTAY', 'DELIVERED'];
 
 async function loadData() {
   const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/stock_snapshot?select=*&order=display_status.asc,item_description.asc&limit=2000`,
+    `${SUPABASE_URL}/rest/v1/stock_snapshot?select=*&order=display_status.asc,order_number.asc,item_description.asc&limit=2000`,
     { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
   );
   if (!res.ok) throw new Error('Failed to fetch: ' + res.status);
@@ -526,22 +546,55 @@ function renderTable(data) {
     return;
   }
   empty.style.display = 'none';
-  info.textContent = `${data.length.toLocaleString()} items`;
 
-  tbody.innerHTML = data.map(r => `
-    <tr>
-      <td>${r.order_number || '—'}</td>
-      <td><span style="font-family:var(--ff-head);font-size:12px;letter-spacing:.06em;color:var(--steel-500);">${r.fulfillment_id || '—'}</span></td>
-      <td>${r.item_description || '—'}</td>
-      <td>
-        <span class="zone-chip ${getZoneChipClass(r.zone)}">${getZoneDisplay(r.zone)}</span>
-        ${r.bin_slot ? `<span style="margin-left:6px;font-family:var(--ff-head);font-size:10px;color:var(--steel-500);letter-spacing:.06em;">${r.bin_slot}</span>` : ''}
+  // Group by order_number (preserve sort order)
+  const groupMap = new Map();
+  data.forEach(r => {
+    const key = r.order_number || '—';
+    if (!groupMap.has(key)) groupMap.set(key, { fulfillment_id: r.fulfillment_id, items: [] });
+    groupMap.get(key).items.push(r);
+  });
+
+  const orderCount = groupMap.size;
+  info.textContent = `${orderCount} orders · ${data.length} items`;
+
+  let html = '';
+  groupMap.forEach((group, order) => {
+    const totalOnHand = group.items.reduce((s, r) => s + (r.on_hand || 0), 0);
+    const itemCount = group.items.length;
+    const zones = [...new Set(group.items.map(r => r.zone).filter(Boolean))];
+
+    // Order group header row
+    html += `<tr class="order-group-header">
+      <td colspan="7">
+        <span class="group-order-id">${order}</span>
+        <span class="group-fulfillment">${group.fulfillment_id || '—'}</span>
+        <span class="group-meta">
+          <span class="group-count">${itemCount} item${itemCount > 1 ? 's' : ''}</span>
+          <span class="group-cartons">${totalOnHand} CTN</span>
+          ${zones.slice(0,3).map(z => `<span class="zone-chip ${getZoneChipClass(z)}" style="font-size:9px;padding:2px 7px;">${getZoneDisplay(z)}</span>`).join('')}
+        </span>
       </td>
-      <td class="qty-cell ${r.on_hand > 0 ? 'qty-has' : 'qty-zero'}">${r.on_hand ?? 0}</td>
-      <td class="qty-cell ${(r.target_count||0) > 0 ? 'qty-has' : 'qty-zero'}">${r.target_count ?? '—'}</td>
-      <td><span class="status-chip ${getStatusChipClass(r.display_status)}">${getStatusLabel(r.display_status)}</span></td>
-    </tr>
-  `).join('');
+    </tr>`;
+
+    // Item rows under order
+    group.items.forEach(r => {
+      html += `<tr class="order-group-row">
+        <td class="indent-arrow">↳</td>
+        <td><span style="font-family:var(--ff-head);font-size:12px;letter-spacing:.06em;color:var(--steel-500);">${r.fulfillment_id || '—'}</span></td>
+        <td>${r.item_description || '—'}</td>
+        <td>
+          <span class="zone-chip ${getZoneChipClass(r.zone)}">${getZoneDisplay(r.zone)}</span>
+          ${r.bin_slot ? `<span style="margin-left:6px;font-family:var(--ff-head);font-size:10px;color:var(--steel-500);letter-spacing:.06em;">${r.bin_slot}</span>` : ''}
+        </td>
+        <td class="qty-cell ${r.on_hand > 0 ? 'qty-has' : 'qty-zero'}">${r.on_hand ?? 0}</td>
+        <td class="qty-cell ${(r.target_count||0) > 0 ? 'qty-has' : 'qty-zero'}">${r.target_count ?? '—'}</td>
+        <td><span class="status-chip ${getStatusChipClass(r.display_status)}">${getStatusLabel(r.display_status)}</span></td>
+      </tr>`;
+    });
+  });
+
+  tbody.innerHTML = html;
 }
 
 function buildZoneFilters(data) {
